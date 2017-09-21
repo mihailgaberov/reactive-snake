@@ -1,6 +1,6 @@
-import { Observable, BehaviorSubject, animationFrame } from './rxjs'
-import { DIRECTIONS, SPEED, SNAKE_LENGTH, FPS, APPLE_COUNT, POINTS_PER_APPLE } from './constants'
-import { Key, Point2D, Scene } from './types'
+import { Observable, BehaviorSubject, animationFrame } from './rxjs';
+import { DIRECTIONS, SPEED, SNAKE_LENGTH, FPS, APPLE_COUNT, POINTS_PER_APPLE } from './constants';
+import { Key, Point2D, Scene } from './types';
 
 import {
   createCanvasElement,
@@ -11,7 +11,7 @@ import {
   renderGameOver,
   getRandomPosition,
   checkCollision
-} from './canvas'
+} from './canvas';
 
 import {
   isGameOver,
@@ -20,75 +20,100 @@ import {
   eat,
   generateSnake,
   generateApples
-} from './utils'
+} from './utils';
 
 /**
  * Create canvas element and append it to the page
  */
-let canvas = createCanvasElement()
-let ctx = canvas.getContext('2d')
-document.body.appendChild(canvas)
+let canvas = createCanvasElement();
+let ctx = canvas.getContext('2d');
+document.body.appendChild(canvas);
 
 /**
  * Starting values
  */
-const INITIAL_DIRECTION = DIRECTIONS[Key.RIGHT]
+const INITIAL_DIRECTION = DIRECTIONS[Key.RIGHT];
 
-let ticks$ = Observable.interval(SPEED)
+/**
+ * Determines the speed of the snake
+ */
+let ticks$ = Observable.interval(SPEED);
 
-let click$ = Observable.fromEvent(document, 'click')
-let keydown$ = Observable.fromEvent(document, 'keydown')
+/**
+ * Track some general user interactions with the document
+ */
+let click$ = Observable.fromEvent(document, 'click');
+let keydown$ = Observable.fromEvent(document, 'keydown');
 
-function createGame(fps$: Observable<number>): Observable<Scene> {
-  let direction$ = keydown$
-    .map((event: KeyboardEvent) => DIRECTIONS[event.keyCode])
-    .filter(direction => !!direction)
-    .scan(nextDirection)
-    .startWith(INITIAL_DIRECTION)
-    .distinctUntilChanged()
+/**
+ * Change direction of the snake based on the latest arrow keypress by the user
+ */
+let direction$ = keydown$
+  .map((event: KeyboardEvent) => DIRECTIONS[event.keyCode])
+  .filter(direction => !!direction)
+  .scan(nextDirection)
+  .startWith(INITIAL_DIRECTION)
+  .distinctUntilChanged();
 
-  let length$ = new BehaviorSubject<number>(SNAKE_LENGTH)
+/**
+ * Broadcasting mechanism used to notify subscribers of collisions 
+ * between the snake and the apples
+ */
+let length$ = new BehaviorSubject<number>(SNAKE_LENGTH);
 
-  let snakeLength$ = length$
-    .scan((step, snakeLength) => snakeLength + step)
-    .share()
+/**
+ * Accumulates the length of the snake (number of body segments)
+ */
+let snakeLength$ = length$
+  .scan((step, snakeLength) => snakeLength + step)
+  .share();
 
-  let score$ = snakeLength$
-    .startWith(0)
-    .scan((score, _) => score + POINTS_PER_APPLE)
+/**
+ * Player's score
+ */
+let score$ = snakeLength$
+  .startWith(0)
+  .scan((score, _) => score + POINTS_PER_APPLE);
 
-  let snake$: Observable<Array<Point2D>> = ticks$
-    .withLatestFrom(direction$, snakeLength$, (_, direction, snakeLength) => [direction, snakeLength])
-    .scan(move, generateSnake())
-    .share()
+/**
+ * Accumulates an array of body segments. Each segment is represented
+ * as a cell on the grid
+ */
+let snake$: Observable<Array<Point2D>> = ticks$
+  .withLatestFrom(direction$, snakeLength$, (_, direction, snakeLength) => [direction, snakeLength])
+  .scan(move, generateSnake())
+  .share();
 
-  let apples$ = snake$
-    .scan(eat, generateApples())
-    .distinctUntilChanged()
-    .share()
+/**
+ * List of apples
+ */
+let apples$ = snake$
+  .scan(eat, generateApples())
+  .distinctUntilChanged()
+  .share();
 
-  let appleEaten$ = apples$
-    .skip(1)
-    .do(() => length$.next(POINTS_PER_APPLE))
-    .subscribe()
+/**
+ * Used to broadcast collisions to update the score and add a new 
+ * body segment to the snake
+ */
+let appleEaten$ = apples$
+  .skip(1)
+  .do(() => length$.next(POINTS_PER_APPLE))
+  .subscribe();
 
-  let scene$ = Observable.combineLatest(snake$, apples$, score$, (snake, apples, score) => ({ snake, apples, score }))
+/**
+ * Core game logic which returns an Observable of the scene. This will be 
+ * used to render the game to the canvas as it unfolds
+ */
+let scene$ = Observable.combineLatest(snake$, apples$, score$, (snake, apples, score) => ({ snake, apples, score }));
 
-  return fps$.withLatestFrom(scene$, (_, scene) => scene)
-}
-
-let game$ = Observable.of('Start Game')
-  .map(() => Observable.interval(1000 / FPS, animationFrame))
-  .switchMap(createGame)
+/**
+ * This stream takes care of rendering the game while maintaining 60 FPS
+ */
+let game$ = Observable.interval(1000 / FPS, animationFrame)
+  .withLatestFrom(scene$, (_, scene) => scene)
   .takeWhile(scene => !isGameOver(scene))
-
-const startGame = () => game$.subscribe({
-  next: (scene) => renderScene(ctx, scene),
-  complete: () => {
-    renderGameOver(ctx)
-
-    click$.first().subscribe(startGame)
-  }
-})
-
-startGame()
+  .subscribe({
+    next: (scene) => renderScene(ctx, scene),
+    complete: () => renderGameOver(ctx)
+  });
