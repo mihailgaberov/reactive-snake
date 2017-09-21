@@ -1,13 +1,33 @@
+# compiled output
+/dist
+/tmp
+
+# dependencies
+/node_modules
+/bower_components
+
+# IDEs and editors
+/.idea
+/.vscode
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage/*
+/libpeerconnection.log
+npm-debug.log
+testem.log
+/typings
+
+# e2e
+/e2e/*.js
+/e2e/*.map
+
+#System Files
 .DS_Store
-.idea
-g
-javascript-testing
-lottoland-react-demo
-mickey-gallery
-months
-node-cli-gitinit
-node-watcher
-react-redux-starter-kit
-select-year-with-offset
-test
-vue-tic-tac-toe
+Thumbs.db
